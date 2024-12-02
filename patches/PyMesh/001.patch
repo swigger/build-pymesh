@@ -1,0 +1,847 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f3d1432e..142c0238 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,5 +1,7 @@
+-cmake_minimum_required(VERSION 3.11.0)
++cmake_minimum_required(VERSION 3.15)
+ #set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")
++set(CMP0091 NEW)
++set(MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+ 
+ project(PyMesh)
+ 
+diff --git a/python/PyPredicates.cpp b/python/PyPredicates.cpp
+index ab64e59e..9ea2da66 100644
+--- a/python/PyPredicates.cpp
++++ b/python/PyPredicates.cpp
+@@ -14,37 +14,37 @@ using Arr2D = Eigen::Matrix<double, 2, 1>;
+ using Arr3D = Eigen::Matrix<double, 3, 1>;
+ 
+ void init_predicates(py::module& m) {
+-    m.def("exactinit", &exactinit);
++    m.def("exactinit", &prdc_exactinit);
+     m.def("orient2d",
+             [](Arr2D& pa, Arr2D& pb, Arr2D& pc) {
+-            return orient2d(pa.data(), pb.data(), pc.data());
++            return prdc_orient2d(pa.data(), pb.data(), pc.data());
+             });
+     m.def("orient2dexact",
+             [](Arr2D& pa, Arr2D& pb, Arr2D& pc) {
+-            return orient2dexact(pa.data(), pb.data(), pc.data());
++            return prdc_orient2dexact(pa.data(), pb.data(), pc.data());
+             });
+     m.def("orient3d",
+             [](Arr3D& pa, Arr3D& pb, Arr3D& pc, Arr3D& pd) {
+-            return orient3d(pa.data(), pb.data(), pc.data(), pd.data());
++            return prdc_orient3d(pa.data(), pb.data(), pc.data(), pd.data());
+             });
+     m.def("orient3dexact",
+             [](Arr3D& pa, Arr3D& pb, Arr3D& pc, Arr3D& pd) {
+-            return orient3dexact(pa.data(), pb.data(), pc.data(), pd.data());
++            return prdc_orient3dexact(pa.data(), pb.data(), pc.data(), pd.data());
+             });
+     m.def("incircle",
+             [](Arr2D& pa, Arr2D& pb, Arr2D& pc, Arr2D& pd) {
+-            return incircle(pa.data(), pb.data(), pc.data(), pd.data());
++            return prdc_incircle(pa.data(), pb.data(), pc.data(), pd.data());
+             });
+     m.def("incircleexact",
+             [](Arr2D& pa, Arr2D& pb, Arr2D& pc, Arr2D& pd) {
+-            return incircleexact(pa.data(), pb.data(), pc.data(), pd.data());
++            return prdc_incircleexact(pa.data(), pb.data(), pc.data(), pd.data());
+             });
+     m.def("insphere",
+             [](Arr3D& pa, Arr3D& pb, Arr3D& pc, Arr3D& pd, Arr3D& pe) {
+-            return insphere(pa.data(), pb.data(), pc.data(), pd.data(), pe.data());
++            return prdc_insphere(pa.data(), pb.data(), pc.data(), pd.data(), pe.data());
+             });
+     m.def("insphereexact",
+             [](Arr3D& pa, Arr3D& pb, Arr3D& pc, Arr3D& pd, Arr3D& pe) {
+-            return insphereexact(pa.data(), pb.data(), pc.data(), pd.data(), pe.data());
++            return prdc_insphereexact(pa.data(), pb.data(), pc.data(), pd.data(), pe.data());
+             });
+ }
+diff --git a/src/Misc/HashGridImplementation.inl b/src/Misc/HashGridImplementation.inl
+index 8c2bd92d..9a247117 100644
+--- a/src/Misc/HashGridImplementation.inl
++++ b/src/Misc/HashGridImplementation.inl
+@@ -290,7 +290,7 @@ typename HashGridImplementation<Trait>::HashKey HashGridImplementation<Trait>::c
+     return typename HashKey::VectorType(
+             (value / m_cell_size).unaryExpr(
+                 std::ptr_fun<Float,Float>(std::round)
+-                ).template cast<long>());
++                ).template cast<int64_t>());
+ }
+ 
+ template <typename Trait>
+diff --git a/src/Misc/HashMapTrait.h b/src/Misc/HashMapTrait.h
+index 42c2c263..46cedc93 100644
+--- a/src/Misc/HashMapTrait.h
++++ b/src/Misc/HashMapTrait.h
+@@ -21,7 +21,7 @@ namespace PyMesh {
+ template<int DIM, int HashType>
+ struct HashMapTrait {
+     static constexpr int dim = DIM;
+-    typedef VectorHashKey<long, DIM> HashKey;
++    typedef VectorHashKey<int64_t, DIM> HashKey;
+ 
+     struct HashMapFunc {
+         int operator()(const HashKey& key) const {
+diff --git a/src/Misc/TriBox2D.h b/src/Misc/TriBox2D.h
+index 737a43fe..529d7ab6 100644
+--- a/src/Misc/TriBox2D.h
++++ b/src/Misc/TriBox2D.h
+@@ -6,7 +6,7 @@
+ namespace PyMesh {
+ namespace TriBox2D {
+ 
+-bool get_orientation(const Float triverts[3][2]) {
++inline bool get_orientation(const Float triverts[3][2]) {
+     Float r =
+         (triverts[1][0] - triverts[0][0]) *
+         (triverts[2][1] - triverts[0][1]) -
+@@ -15,7 +15,7 @@ bool get_orientation(const Float triverts[3][2]) {
+     return r >= 0;
+ }
+ 
+-bool outside_halfplane(const Float target[2], const Float p[2], const Float n[2],
++inline bool outside_halfplane(const Float target[2], const Float p[2], const Float n[2],
+         bool positive_orientation) {
+     const Float v[2] = {target[0] - p[0], target[1] - p[1]};
+     if (positive_orientation)
+@@ -24,7 +24,7 @@ bool outside_halfplane(const Float target[2], const Float p[2], const Float n[2]
+         return (v[0] * n[0] + v[1] * n[1]) < 0;
+ }
+ 
+-int triBoxOverlap(const Float boxcenter[2], const Float boxhalfsize[2], const Float triverts[3][2]) {
++inline int triBoxOverlap(const Float boxcenter[2], const Float boxhalfsize[2], const Float triverts[3][2]) {
+     // Check all possible separating lines:
+     // * 4 edges of the box
+     // * 3 edges of the triangle
+diff --git a/src/Misc/tribox3.h b/src/Misc/tribox3.h
+index 2ca7a6db..95239754 100644
+--- a/src/Misc/tribox3.h
++++ b/src/Misc/tribox3.h
+@@ -45,7 +45,7 @@
+ 
+ using namespace PyMesh;
+ 
+-int planeBoxOverlap(const Float normal[3], const Float vert[3], const Float maxbox[3])	// -NJMP-
++inline int planeBoxOverlap(const Float normal[3], const Float vert[3], const Float maxbox[3])	// -NJMP-
+ {
+   int q;
+   Float vmin[3],vmax[3],v;
+@@ -116,7 +116,7 @@ int planeBoxOverlap(const Float normal[3], const Float vert[3], const Float maxb
+ 	rad = fa * boxhalfsize[X] + fb * boxhalfsize[Y];   \
+ 	if(min>rad || max<-rad) return 0;
+ 
+-int triBoxOverlap(const Float boxcenter[3],const Float boxhalfsize[3],const Float triverts[3][3])
++inline int triBoxOverlap(const Float boxcenter[3],const Float boxhalfsize[3],const Float triverts[3][3])
+ {
+ 
+   /*    use separating axis theorem to test overlap between triangle and box */
+diff --git a/tests/external/gmock-1.7.0/gtest/cmake/internal_utils.cmake b/tests/external/gmock-1.7.0/gtest/cmake/internal_utils.cmake
+index 8cb21894..5630ea77 100644
+--- a/tests/external/gmock-1.7.0/gtest/cmake/internal_utils.cmake
++++ b/tests/external/gmock-1.7.0/gtest/cmake/internal_utils.cmake
+@@ -55,7 +55,7 @@ macro(config_compiler_and_linker)
+   if (MSVC)
+     # Newlines inside flags variables break CMake's NMake generator.
+     # TODO(vladl@google.com): Add -RTCs and -RTCu to debug builds.
+-    set(cxx_base_flags "-GS -W4 -WX -wd4127 -wd4251 -wd4275 -nologo -J -Zi")
++    set(cxx_base_flags "-GS -W4 -wd4127 -wd4251 -wd4275 -nologo -J -Zi")
+     if (MSVC_VERSION LESS 1400)
+       # Suppress spurious warnings MSVC 7.1 sometimes issues.
+       # Forcing value to bool.
+diff --git a/tests/tools/ConvexHull/unit_test_driver.cpp b/tests/tools/ConvexHull/unit_test_driver.cpp
+index 44ba6189..d5bebb27 100644
+--- a/tests/tools/ConvexHull/unit_test_driver.cpp
++++ b/tests/tools/ConvexHull/unit_test_driver.cpp
+@@ -1,4 +1,10 @@
+ /* This file is part of PyMesh. Copyright (c) 2015 by Qingnan Zhou */
++#include <stdio.h>
++#ifdef _MSC_VER
++// libqhull has io.h conflicts the io.h in windows SDK.
++#include <../ucrt/io.h>
++#endif
++
+ #include <gtest/gtest.h>
+ #include <gmock/gmock.h>
+ #ifdef WITH_CGAL
+diff --git a/tests/tools/Predicates/predicates_test.h b/tests/tools/Predicates/predicates_test.h
+index 28288163..ea7038ef 100644
+--- a/tests/tools/Predicates/predicates_test.h
++++ b/tests/tools/Predicates/predicates_test.h
+@@ -11,11 +11,11 @@ TEST(Orientat3D, Simple) {
+     double b[3]{0.0, 0.0, 0.0};
+     double c[3]{0.0, 0.0, 0.0};
+     double d[3]{0.0, 0.0, 0.0};
+-    double r1 = orient3d(a,b,c,d);
+-    double r2 = orient3dexact(a,b,c,d);
++    double r1 = prdc_orient3d(a,b,c,d);
++    double r2 = prdc_orient3dexact(a,b,c,d);
+     using Arr3D = Eigen::Matrix<double, 3, 1>;
+     auto run = [](Arr3D& pa, Arr3D& pb, Arr3D& pc, Arr3D& pd) {
+-        return orient3d(pa.data(), pb.data(), pc.data(), pd.data());
++        return prdc_orient3d(pa.data(), pb.data(), pc.data(), pd.data());
+     };
+     Arr3D pa(0,0,0);
+     double r3 = run(pa, pa, pa, pa);
+diff --git a/third_party/build.py b/third_party/build.py
+index 93550c55..09838253 100755
+--- a/third_party/build.py
++++ b/third_party/build.py
+@@ -43,10 +43,11 @@ def build_generic(libname, build_flags="", cleanup=True):
+     subprocess.check_call(cmd.split(), cwd=build_dir);
+ 
+     # Build cgal
+-    cmd = "cmake --build {}".format(build_dir);
++    rls = "--config Release" if os.name == 'nt' else ''
++    cmd = "cmake --build {} {}".format(build_dir, rls);
+     subprocess.check_call(cmd.split());
+ 
+-    cmd = "cmake --build {} --target install".format(build_dir);
++    cmd = "cmake --build {} {} --target install".format(build_dir, rls);
+     subprocess.check_call(cmd.split());
+ 
+     # Clean up
+diff --git a/tools/Boolean/Clipper/ClipperEngine.cpp b/tools/Boolean/Clipper/ClipperEngine.cpp
+index 671fb372..b6498e3a 100644
+--- a/tools/Boolean/Clipper/ClipperEngine.cpp
++++ b/tools/Boolean/Clipper/ClipperEngine.cpp
+@@ -35,7 +35,7 @@ namespace ClipperEngineHelper {
+             if (itr != adjacencies.end()) {
+                 itr->second.push_back(edge[1]);
+             } else {
+-                adjacencies.insert({edge[0], {edge[1]}});
++                adjacencies.insert({(size_t)edge[0], {edge[1]}});
+             }
+         }
+ 
+@@ -148,8 +148,8 @@ void ClipperEngine::clip(ClipperLib::ClipType type) {
+ void ClipperEngine::initialize_if_needed() {
+     m_vertices = MatrixFr::Zero(0,2);
+     m_faces = MatrixIr::Zero(0,3);
+-    if (m_vertices_1.cols() != 2) { m_vertices_1 = m_vertices_1.leftCols(2); }
+-    if (m_vertices_2.cols() != 2) { m_vertices_2 = m_vertices_2.leftCols(2); }
++    if (m_vertices_1.cols() != 2) { m_vertices_1 = MatrixFr(m_vertices_1.leftCols(2)); }
++    if (m_vertices_2.cols() != 2) { m_vertices_2 = MatrixFr(m_vertices_2.leftCols(2)); }
+     m_loops_1.clear();
+     m_loops_2.clear();
+     extract_boundary_loops();
+diff --git a/tools/CGAL/SnapRounding2.cpp b/tools/CGAL/SnapRounding2.cpp
+index 3d6fd8e9..86af79cf 100644
+--- a/tools/CGAL/SnapRounding2.cpp
++++ b/tools/CGAL/SnapRounding2.cpp
+@@ -3,6 +3,7 @@
+ 
+ #include <list>
+ #include <vector>
++#include <set>
+ 
+ #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
+ #include <CGAL/Snap_rounding_traits_2.h>
+diff --git a/tools/MeshUtils/DegeneratedTriangleRemoval.cpp b/tools/MeshUtils/DegeneratedTriangleRemoval.cpp
+index d53eb225..56bc9826 100644
+--- a/tools/MeshUtils/DegeneratedTriangleRemoval.cpp
++++ b/tools/MeshUtils/DegeneratedTriangleRemoval.cpp
+@@ -23,7 +23,7 @@ DegeneratedTriangleRemoval::DegeneratedTriangleRemoval(
+         const MatrixFr& vertices, const MatrixIr& faces) :
+ m_vertices(vertices), m_faces(faces) {
+     assert(m_faces.cols() == 3);
+-    exactinit();
++    prdc_exactinit();
+     init_ori_face_indices();
+ }
+ 
+diff --git a/tools/MeshUtils/FaceUtils.cpp b/tools/MeshUtils/FaceUtils.cpp
+index e6b9bc79..50adb596 100644
+--- a/tools/MeshUtils/FaceUtils.cpp
++++ b/tools/MeshUtils/FaceUtils.cpp
+@@ -10,18 +10,18 @@ bool FaceUtils::is_colinear_2D(
+         const Vector2F& v0,
+         const Vector2F& v1,
+         const Vector2F& v2) {
+-    exactinit();
++    prdc_exactinit();
+     double v0_xy[2] = {v0[0], v0[1]};
+     double v1_xy[2] = {v1[0], v1[1]};
+     double v2_xy[2] = {v2[0], v2[1]};
+-    return orient2d(v0_xy, v1_xy, v2_xy) == 0;
++    return prdc_orient2d(v0_xy, v1_xy, v2_xy) == 0;
+ }
+ 
+ bool FaceUtils::is_colinear_3D(
+         const Vector3F& v0,
+         const Vector3F& v1,
+         const Vector3F& v2) {
+-    exactinit();
++    prdc_exactinit();
+     double v0_xy[2] = {v0[0], v0[1]};
+     double v1_xy[2] = {v1[0], v1[1]};
+     double v2_xy[2] = {v2[0], v2[1]};
+@@ -34,9 +34,9 @@ bool FaceUtils::is_colinear_3D(
+     double v1_zx[2] = {v1[2], v1[0]};
+     double v2_zx[2] = {v2[2], v2[0]};
+ 
+-    bool colinear_xy = orient2d(v0_xy, v1_xy, v2_xy) == 0;
+-    bool colinear_yz = orient2d(v0_yz, v1_yz, v2_yz) == 0;
+-    bool colinear_zx = orient2d(v0_zx, v1_zx, v2_zx) == 0;
++    bool colinear_xy = prdc_orient2d(v0_xy, v1_xy, v2_xy) == 0;
++    bool colinear_yz = prdc_orient2d(v0_yz, v1_yz, v2_yz) == 0;
++    bool colinear_zx = prdc_orient2d(v0_zx, v1_zx, v2_zx) == 0;
+     return colinear_xy && colinear_yz && colinear_zx;
+ }
+ 
+@@ -45,7 +45,7 @@ std::vector<size_t> FaceUtils::get_degenerated_faces(
+     std::vector<size_t> result;
+     const size_t num_faces = faces.rows();
+     const size_t dim = vertices.cols();
+-    exactinit();
++    prdc_exactinit();
+ 
+     if (dim == 3) {
+         for (size_t i=0; i<num_faces; i++) {
+@@ -80,7 +80,7 @@ VectorF FaceUtils::get_triangle_orientations(
+                 "Triangle orientation is only well-defined in 2D");
+     }
+ 
+-    exactinit();
++    prdc_exactinit();
+ 
+     VectorF results(num_faces);
+     for (size_t i=0; i<num_faces; i++) {
+@@ -88,7 +88,7 @@ VectorF FaceUtils::get_triangle_orientations(
+         double v0_xy[2] = {vertices(f[0], 0), vertices(f[0], 1)};
+         double v1_xy[2] = {vertices(f[1], 0), vertices(f[1], 1)};
+         double v2_xy[2] = {vertices(f[2], 0), vertices(f[2], 1)};
+-        results[i] = orient2d(v0_xy, v1_xy, v2_xy);
++        results[i] = prdc_orient2d(v0_xy, v1_xy, v2_xy);
+     }
+     return results;
+ }
+diff --git a/tools/MeshUtils/MeshUtils.cpp b/tools/MeshUtils/MeshUtils.cpp
+index 7ca6fcbf..0f73e476 100644
+--- a/tools/MeshUtils/MeshUtils.cpp
++++ b/tools/MeshUtils/MeshUtils.cpp
+@@ -39,7 +39,7 @@ MatrixI MeshUtils::extract_exterior_faces(const MatrixI& voxels) {
+     vertex_buffer.reserve(face_counter.size());
+     for (FaceCounter::const_iterator itr = face_counter.begin();
+             itr!=face_counter.end(); itr++) {
+-        assert(itr->second == 1 or itr->second == 2);
++        assert(itr->second == 1 || itr->second == 2);
+         if (itr->second == 1) {
+             vertex_buffer.push_back(&itr->first);
+         }
+diff --git a/tools/MeshUtils/TriangleMetric.cpp b/tools/MeshUtils/TriangleMetric.cpp
+index b3303431..d4ac6004 100644
+--- a/tools/MeshUtils/TriangleMetric.cpp
++++ b/tools/MeshUtils/TriangleMetric.cpp
+@@ -18,6 +18,12 @@ using namespace TriangleMetricHelper;
+ 
+ const Real TriangleMetric::epsilon = 1e-8;
+ bool TriangleMetric::use_lin_canny = true;
++void TriangleMetric::setUseLinCanny(bool v) {
++	use_lin_canny = v;
++}
++bool TriangleMetric::getUseLinCanny() {
++	return use_lin_canny;
++}
+ 
+ TriangleMetric::TriangleMetric() {
+ 	m_ft_types[0] = m_ft_types[1] = VERTEX;
+diff --git a/tools/MeshUtils/TriangleMetric.h b/tools/MeshUtils/TriangleMetric.h
+index 9127f9e8..7674e1fd 100644
+--- a/tools/MeshUtils/TriangleMetric.h
++++ b/tools/MeshUtils/TriangleMetric.h
+@@ -30,7 +30,7 @@ class TriangleMetric {
+         }
+ 
+         Real getClosestPts(Point& p1, Point& p2) {
+-            if (use_lin_canny) {
++            if (getUseLinCanny()) {
+                 return runLinCanny(p1, p2);
+             } else {
+                 return oldCodeWrapper(p1, p2);
+@@ -99,9 +99,8 @@ class TriangleMetric {
+         int m_ft_idx[2];
+ 
+     public:
+-        static void setUseLinCanny(bool v) {
+-            use_lin_canny = v;
+-        }
++        static void setUseLinCanny(bool v);
++        static bool getUseLinCanny();
+ 
+     private:
+         static const Real epsilon;
+diff --git a/tools/MeshUtils/VoxelUtils.cpp b/tools/MeshUtils/VoxelUtils.cpp
+index 063712d8..6de6799f 100644
+--- a/tools/MeshUtils/VoxelUtils.cpp
++++ b/tools/MeshUtils/VoxelUtils.cpp
+@@ -20,7 +20,7 @@ VectorF VoxelUtils::get_tet_orientations(
+         throw RuntimeError("Degenerate tet expect a tet mesh.");
+     }
+ 
+-    exactinit();
++    prdc_exactinit();
+     VectorF results(num_tets);
+     results.setZero();
+     for (size_t i=0; i<num_tets; i++) {
+@@ -49,7 +49,7 @@ VectorF VoxelUtils::get_tet_orientations(
+         // the opposite (i.e. d is above the triangle (a,b,c)), so this check
+         // switch the ordering of a and b to return positive if tet is not
+         // inverted.
+-        results[i] = orient3d(b, a, c, d);
++        results[i] = prdc_orient3d(b, a, c, d);
+     }
+     return results;
+ }
+@@ -70,7 +70,7 @@ VectorF VoxelUtils::is_delaunay(
+     }
+ 
+     constexpr int INVALID = std::numeric_limits<int>::max();
+-    auto get_opposite_vertex = [&tets](size_t index, const Triplet& f) {
++    auto get_opposite_vertex = [&tets, INVALID](size_t index, const Triplet& f) {
+         for (size_t i=0; i<4; i++) {
+             const int val = tets(index, i);
+             if (val != f.get_data()[0] &&
+@@ -111,7 +111,7 @@ VectorF VoxelUtils::is_delaunay(
+                 // Note that the orientation of the sphere/tet is different from
+                 // the orientation defined by the MSH format.  Swapping v0 and
+                 // v1 to ensure consistency.
+-                auto r = insphere(
++                auto r = prdc_insphere(
+                         const_cast<double*>(v1.data()),
+                         const_cast<double*>(v0.data()),
+                         const_cast<double*>(v2.data()),
+diff --git a/tools/Predicates/predicates.c b/tools/Predicates/predicates.c
+index c20762b9..3f996294 100644
+--- a/tools/Predicates/predicates.c
++++ b/tools/Predicates/predicates.c
+@@ -494,7 +494,7 @@ REAL *e;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-double doublerand()
++static double doublerand()
+ {
+   double result;
+   double expo;
+@@ -520,7 +520,7 @@ double doublerand()
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-double narrowdoublerand()
++static double narrowdoublerand()
+ {
+   double result;
+   double expo;
+@@ -545,7 +545,7 @@ double narrowdoublerand()
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-double uniformdoublerand()
++static double uniformdoublerand()
+ {
+   double result;
+   long a, b;
+@@ -563,7 +563,7 @@ double uniformdoublerand()
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-float floatrand()
++static float floatrand()
+ {
+   float result;
+   float expo;
+@@ -588,7 +588,7 @@ float floatrand()
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-float narrowfloatrand()
++static float narrowfloatrand()
+ {
+   float result;
+   float expo;
+@@ -612,7 +612,7 @@ float narrowfloatrand()
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-float uniformfloatrand()
++static float uniformfloatrand()
+ {
+   float result;
+   long a;
+@@ -641,7 +641,7 @@ float uniformfloatrand()
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-void exactinit()
++void prdc_exactinit()
+ {
+   REAL half;
+   REAL check, lastcheck;
+@@ -696,7 +696,7 @@ void exactinit()
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-int grow_expansion(elen, e, b, h)                /* e and h can be the same. */
++static int grow_expansion(elen, e, b, h)                /* e and h can be the same. */
+ int elen;
+ REAL *e;
+ REAL b;
+@@ -733,7 +733,7 @@ REAL *h;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-int grow_expansion_zeroelim(elen, e, b, h)       /* e and h can be the same. */
++static int grow_expansion_zeroelim(elen, e, b, h)       /* e and h can be the same. */
+ int elen;
+ REAL *e;
+ REAL b;
+@@ -775,7 +775,7 @@ REAL *h;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-int expansion_sum(elen, e, flen, f, h)
++static int expansion_sum(elen, e, flen, f, h)
+ /* e and h can be the same, but f and h cannot. */
+ int elen;
+ REAL *e;
+@@ -824,7 +824,7 @@ REAL *h;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-int expansion_sum_zeroelim1(elen, e, flen, f, h)
++static int expansion_sum_zeroelim1(elen, e, flen, f, h)
+ /* e and h can be the same, but f and h cannot. */
+ int elen;
+ REAL *e;
+@@ -884,7 +884,7 @@ REAL *h;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-int expansion_sum_zeroelim2(elen, e, flen, f, h)
++static int expansion_sum_zeroelim2(elen, e, flen, f, h)
+ /* e and h can be the same, but f and h cannot. */
+ int elen;
+ REAL *e;
+@@ -941,7 +941,7 @@ REAL *h;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-int fast_expansion_sum(elen, e, flen, f, h)           /* h cannot be e or f. */
++static int fast_expansion_sum(elen, e, flen, f, h)           /* h cannot be e or f. */
+ int elen;
+ REAL *e;
+ int flen;
+@@ -1018,7 +1018,7 @@ REAL *h;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-int fast_expansion_sum_zeroelim(elen, e, flen, f, h)  /* h cannot be e or f. */
++static int fast_expansion_sum_zeroelim(elen, e, flen, f, h)  /* h cannot be e or f. */
+ int elen;
+ REAL *e;
+ int flen;
+@@ -1103,7 +1103,7 @@ REAL *h;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-int linear_expansion_sum(elen, e, flen, f, h)         /* h cannot be e or f. */
++static int linear_expansion_sum(elen, e, flen, f, h)         /* h cannot be e or f. */
+ int elen;
+ REAL *e;
+ int flen;
+@@ -1167,7 +1167,7 @@ REAL *h;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-int linear_expansion_sum_zeroelim(elen, e, flen, f, h)/* h cannot be e or f. */
++static int linear_expansion_sum_zeroelim(elen, e, flen, f, h)/* h cannot be e or f. */
+ int elen;
+ REAL *e;
+ int flen;
+@@ -1241,7 +1241,7 @@ REAL *h;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-int scale_expansion(elen, e, b, h)            /* e and h cannot be the same. */
++static int scale_expansion(elen, e, b, h)            /* e and h cannot be the same. */
+ int elen;
+ REAL *e;
+ REAL b;
+@@ -1290,7 +1290,7 @@ REAL *h;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-int scale_expansion_zeroelim(elen, e, b, h)   /* e and h cannot be the same. */
++static int scale_expansion_zeroelim(elen, e, b, h)   /* e and h cannot be the same. */
+ int elen;
+ REAL *e;
+ REAL b;
+@@ -1345,7 +1345,7 @@ REAL *h;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-int compress(elen, e, h)                         /* e and h may be the same. */
++static int compress(elen, e, h)                         /* e and h may be the same. */
+ int elen;
+ REAL *e;
+ REAL *h;
+@@ -1390,7 +1390,7 @@ REAL *h;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-REAL estimate(elen, e)
++static REAL estimate(elen, e)
+ int elen;
+ REAL *e;
+ {
+@@ -1430,7 +1430,7 @@ REAL *e;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-REAL orient2dfast(pa, pb, pc)
++static REAL orient2dfast(pa, pb, pc)
+ REAL *pa;
+ REAL *pb;
+ REAL *pc;
+@@ -1444,10 +1444,7 @@ REAL *pc;
+   return acx * bcy - acy * bcx;
+ }
+ 
+-REAL orient2dexact(pa, pb, pc)
+-REAL *pa;
+-REAL *pb;
+-REAL *pc;
++REAL prdc_orient2dexact(REAL* pa, REAL* pb, REAL* pc)
+ {
+   INEXACT REAL axby1, axcy1, bxcy1, bxay1, cxay1, cxby1;
+   REAL axby0, axcy0, bxcy0, bxay0, cxay0, cxby0;
+@@ -1489,7 +1486,7 @@ REAL *pc;
+   return w[wlength - 1];
+ }
+ 
+-REAL orient2dslow(pa, pb, pc)
++static REAL orient2dslow(pa, pb, pc)
+ REAL *pa;
+ REAL *pb;
+ REAL *pc;
+@@ -1533,7 +1530,7 @@ REAL *pc;
+   return deter[deterlen - 1];
+ }
+ 
+-REAL orient2dadapt(pa, pb, pc, detsum)
++static REAL orient2dadapt(pa, pb, pc, detsum)
+ REAL *pa;
+ REAL *pb;
+ REAL *pc;
+@@ -1617,10 +1614,7 @@ REAL detsum;
+   return(D[Dlength - 1]);
+ }
+ 
+-REAL orient2d(pa, pb, pc)
+-REAL *pa;
+-REAL *pb;
+-REAL *pc;
++REAL prdc_orient2d(REAL* pa, REAL* pb, REAL* pc)
+ {
+   REAL detleft, detright, det;
+   REAL detsum, errbound;
+@@ -1682,7 +1676,7 @@ REAL *pc;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-REAL orient3dfast(pa, pb, pc, pd)
++static REAL orient3dfast(pa, pb, pc, pd)
+ REAL *pa;
+ REAL *pb;
+ REAL *pc;
+@@ -1707,11 +1701,7 @@ REAL *pd;
+        + cdx * (ady * bdz - adz * bdy);
+ }
+ 
+-REAL orient3dexact(pa, pb, pc, pd)
+-REAL *pa;
+-REAL *pb;
+-REAL *pc;
+-REAL *pd;
++REAL prdc_orient3dexact(REAL* pa, REAL* pb, REAL* pc, REAL* pd)
+ {
+   INEXACT REAL axby1, bxcy1, cxdy1, dxay1, axcy1, bxdy1;
+   INEXACT REAL bxay1, cxby1, dxcy1, axdy1, cxay1, dxby1;
+@@ -1788,7 +1778,7 @@ REAL *pd;
+   return deter[deterlen - 1];
+ }
+ 
+-REAL orient3dslow(pa, pb, pc, pd)
++static REAL orient3dslow(pa, pb, pc, pd)
+ REAL *pa;
+ REAL *pb;
+ REAL *pc;
+@@ -1884,7 +1874,7 @@ REAL *pd;
+   return deter[deterlen - 1];
+ }
+ 
+-REAL orient3dadapt(pa, pb, pc, pd, permanent)
++static REAL orient3dadapt(pa, pb, pc, pd, permanent)
+ REAL *pa;
+ REAL *pb;
+ REAL *pc;
+@@ -2289,11 +2279,7 @@ REAL permanent;
+   return finnow[finlength - 1];
+ }
+ 
+-REAL orient3d(pa, pb, pc, pd)
+-REAL *pa;
+-REAL *pb;
+-REAL *pc;
+-REAL *pd;
++REAL prdc_orient3d(REAL* pa, REAL* pb, REAL* pc, REAL* pd)
+ {
+   REAL adx, bdx, cdx, ady, bdy, cdy, adz, bdz, cdz;
+   REAL bdxcdy, cdxbdy, cdxady, adxcdy, adxbdy, bdxady;
+@@ -2360,7 +2346,7 @@ REAL *pd;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-REAL incirclefast(pa, pb, pc, pd)
++static REAL incirclefast(pa, pb, pc, pd)
+ REAL *pa;
+ REAL *pb;
+ REAL *pc;
+@@ -2387,11 +2373,7 @@ REAL *pd;
+   return alift * bcdet + blift * cadet + clift * abdet;
+ }
+ 
+-REAL incircleexact(pa, pb, pc, pd)
+-REAL *pa;
+-REAL *pb;
+-REAL *pc;
+-REAL *pd;
++REAL prdc_incircleexact(REAL* pa, REAL* pb, REAL* pc, REAL* pd)
+ {
+   INEXACT REAL axby1, bxcy1, cxdy1, dxay1, axcy1, bxdy1;
+   INEXACT REAL bxay1, cxby1, dxcy1, axdy1, cxay1, dxby1;
+@@ -2489,7 +2471,7 @@ REAL *pd;
+   return deter[deterlen - 1];
+ }
+ 
+-REAL incircleslow(pa, pb, pc, pd)
++static REAL incircleslow(pa, pb, pc, pd)
+ REAL *pa;
+ REAL *pb;
+ REAL *pc;
+@@ -2649,7 +2631,7 @@ REAL *pd;
+   return deter[deterlen - 1];
+ }
+ 
+-REAL incircleadapt(pa, pb, pc, pd, permanent)
++static REAL incircleadapt(pa, pb, pc, pd, permanent)
+ REAL *pa;
+ REAL *pb;
+ REAL *pc;
+@@ -3223,11 +3205,7 @@ REAL permanent;
+   return finnow[finlength - 1];
+ }
+ 
+-REAL incircle(pa, pb, pc, pd)
+-REAL *pa;
+-REAL *pb;
+-REAL *pc;
+-REAL *pd;
++REAL prdc_incircle(REAL* pa, REAL* pb, REAL* pc, REAL* pd)
+ {
+   REAL adx, bdx, cdx, ady, bdy, cdy;
+   REAL bdxcdy, cdxbdy, cdxady, adxcdy, adxbdy, bdxady;
+@@ -3296,7 +3274,7 @@ REAL *pd;
+ /*                                                                           */
+ /*****************************************************************************/
+ 
+-REAL inspherefast(pa, pb, pc, pd, pe)
++static REAL inspherefast(pa, pb, pc, pd, pe)
+ REAL *pa;
+ REAL *pb;
+ REAL *pc;
+@@ -3344,12 +3322,7 @@ REAL *pe;
+   return (dlift * abc - clift * dab) + (blift * cda - alift * bcd);
+ }
+ 
+-REAL insphereexact(pa, pb, pc, pd, pe)
+-REAL *pa;
+-REAL *pb;
+-REAL *pc;
+-REAL *pd;
+-REAL *pe;
++REAL prdc_insphereexact(REAL* pa, REAL* pb, REAL* pc, REAL* pd, REAL* pe)
+ {
+   INEXACT REAL axby1, bxcy1, cxdy1, dxey1, exay1;
+   INEXACT REAL bxay1, cxby1, dxcy1, exdy1, axey1;
+@@ -3601,7 +3574,7 @@ REAL *pe;
+   return deter[deterlen - 1];
+ }
+ 
+-REAL insphereslow(pa, pb, pc, pd, pe)
++static REAL insphereslow(pa, pb, pc, pd, pe)
+ REAL *pa;
+ REAL *pb;
+ REAL *pc;
+@@ -3935,7 +3908,7 @@ REAL *pe;
+   return deter[deterlen - 1];
+ }
+ 
+-REAL insphereadapt(pa, pb, pc, pd, pe, permanent)
++static REAL insphereadapt(pa, pb, pc, pd, pe, permanent)
+ REAL *pa;
+ REAL *pb;
+ REAL *pc;
+@@ -4152,15 +4125,10 @@ REAL permanent;
+     return det;
+   }
+ 
+-  return insphereexact(pa, pb, pc, pd, pe);
++  return prdc_insphereexact(pa, pb, pc, pd, pe);
+ }
+ 
+-REAL insphere(pa, pb, pc, pd, pe)
+-REAL *pa;
+-REAL *pb;
+-REAL *pc;
+-REAL *pd;
+-REAL *pe;
++REAL prdc_insphere(REAL* pa, REAL* pb, REAL* pc, REAL* pd, REAL* pe)
+ {
+   REAL aex, bex, cex, dex;
+   REAL aey, bey, cey, dey;
+diff --git a/tools/Predicates/predicates.h b/tools/Predicates/predicates.h
+index 894e4d6a..11ae11aa 100644
+--- a/tools/Predicates/predicates.h
++++ b/tools/Predicates/predicates.h
+@@ -6,15 +6,15 @@ extern "C" {
+ #endif
+ 
+ #pragma GCC visibility push(hidden)
+-void exactinit();
+-double orient2d(double pa[2], double pb[2], double pc[2]);
+-double orient2dexact(double pa[2], double pb[2], double pc[2]);
+-double orient3d(double pa[3], double pb[3], double pc[3], double pd[3]);
+-double orient3dexact(double pa[3], double pb[3], double pc[3], double pd[3]);
+-double incircle(double pa[2], double pb[2], double pc[2], double pd[2]);
+-double incircleexact(double pa[2], double pb[2], double pc[2], double pd[2]);
+-double insphere(double pa[3], double pb[3], double pc[3], double pd[3], double pe[3]);
+-double insphereexact(double pa[3], double pb[3], double pc[3], double pd[3], double pe[3]);
++void prdc_exactinit();
++double prdc_orient2d(double pa[2], double pb[2], double pc[2]);
++double prdc_orient2dexact(double pa[2], double pb[2], double pc[2]);
++double prdc_orient3d(double pa[3], double pb[3], double pc[3], double pd[3]);
++double prdc_orient3dexact(double pa[3], double pb[3], double pc[3], double pd[3]);
++double prdc_incircle(double pa[2], double pb[2], double pc[2], double pd[2]);
++double prdc_incircleexact(double pa[2], double pb[2], double pc[2], double pd[2]);
++double prdc_insphere(double pa[3], double pb[3], double pc[3], double pd[3], double pe[3]);
++double prdc_insphereexact(double pa[3], double pb[3], double pc[3], double pd[3], double pe[3]);
+ 
+ #pragma GCC visibility pop
+ 

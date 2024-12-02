@@ -1,0 +1,5 @@
+/PyMesh/
+/vcpkg/
+*.old
+*.tmp
+*.tgz
