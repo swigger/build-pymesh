@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index f3d1432e..142c0238 100644
+index f3d1432..142c023 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -1,5 +1,7 @@
@@ -12,7 +12,7 @@ index f3d1432e..142c0238 100644
  project(PyMesh)
  
 diff --git a/python/PyPredicates.cpp b/python/PyPredicates.cpp
-index ab64e59e..9ea2da66 100644
+index ab64e59..9ea2da6 100644
 --- a/python/PyPredicates.cpp
 +++ b/python/PyPredicates.cpp
 @@ -14,37 +14,37 @@ using Arr2D = Eigen::Matrix<double, 2, 1>;
@@ -63,7 +63,7 @@ index ab64e59e..9ea2da66 100644
              });
  }
 diff --git a/src/Misc/HashGridImplementation.inl b/src/Misc/HashGridImplementation.inl
-index 8c2bd92d..9a247117 100644
+index 8c2bd92..9a24711 100644
 --- a/src/Misc/HashGridImplementation.inl
 +++ b/src/Misc/HashGridImplementation.inl
 @@ -290,7 +290,7 @@ typename HashGridImplementation<Trait>::HashKey HashGridImplementation<Trait>::c
@@ -76,7 +76,7 @@ index 8c2bd92d..9a247117 100644
  
  template <typename Trait>
 diff --git a/src/Misc/HashMapTrait.h b/src/Misc/HashMapTrait.h
-index 42c2c263..46cedc93 100644
+index 42c2c26..46cedc9 100644
 --- a/src/Misc/HashMapTrait.h
 +++ b/src/Misc/HashMapTrait.h
 @@ -21,7 +21,7 @@ namespace PyMesh {
@@ -89,7 +89,7 @@ index 42c2c263..46cedc93 100644
      struct HashMapFunc {
          int operator()(const HashKey& key) const {
 diff --git a/src/Misc/TriBox2D.h b/src/Misc/TriBox2D.h
-index 737a43fe..529d7ab6 100644
+index 737a43f..529d7ab 100644
 --- a/src/Misc/TriBox2D.h
 +++ b/src/Misc/TriBox2D.h
 @@ -6,7 +6,7 @@
@@ -120,7 +120,7 @@ index 737a43fe..529d7ab6 100644
      // * 4 edges of the box
      // * 3 edges of the triangle
 diff --git a/src/Misc/tribox3.h b/src/Misc/tribox3.h
-index 2ca7a6db..95239754 100644
+index 2ca7a6d..9523975 100644
 --- a/src/Misc/tribox3.h
 +++ b/src/Misc/tribox3.h
 @@ -45,7 +45,7 @@
@@ -142,7 +142,7 @@ index 2ca7a6db..95239754 100644
  
    /*    use separating axis theorem to test overlap between triangle and box */
 diff --git a/tests/external/gmock-1.7.0/gtest/cmake/internal_utils.cmake b/tests/external/gmock-1.7.0/gtest/cmake/internal_utils.cmake
-index 8cb21894..5630ea77 100644
+index 8cb2189..5630ea7 100644
 --- a/tests/external/gmock-1.7.0/gtest/cmake/internal_utils.cmake
 +++ b/tests/external/gmock-1.7.0/gtest/cmake/internal_utils.cmake
 @@ -55,7 +55,7 @@ macro(config_compiler_and_linker)
@@ -155,7 +155,7 @@ index 8cb21894..5630ea77 100644
        # Suppress spurious warnings MSVC 7.1 sometimes issues.
        # Forcing value to bool.
 diff --git a/tests/tools/ConvexHull/unit_test_driver.cpp b/tests/tools/ConvexHull/unit_test_driver.cpp
-index 44ba6189..d5bebb27 100644
+index 44ba618..d5bebb2 100644
 --- a/tests/tools/ConvexHull/unit_test_driver.cpp
 +++ b/tests/tools/ConvexHull/unit_test_driver.cpp
 @@ -1,4 +1,10 @@
@@ -170,7 +170,7 @@ index 44ba6189..d5bebb27 100644
  #include <gmock/gmock.h>
  #ifdef WITH_CGAL
 diff --git a/tests/tools/Predicates/predicates_test.h b/tests/tools/Predicates/predicates_test.h
-index 28288163..ea7038ef 100644
+index 2828816..ea7038e 100644
 --- a/tests/tools/Predicates/predicates_test.h
 +++ b/tests/tools/Predicates/predicates_test.h
 @@ -11,11 +11,11 @@ TEST(Orientat3D, Simple) {
@@ -189,25 +189,69 @@ index 28288163..ea7038ef 100644
      Arr3D pa(0,0,0);
      double r3 = run(pa, pa, pa, pa);
 diff --git a/third_party/build.py b/third_party/build.py
-index 93550c55..09838253 100755
+index 93550c5..3b6f674 100755
 --- a/third_party/build.py
 +++ b/third_party/build.py
-@@ -43,10 +43,11 @@ def build_generic(libname, build_flags="", cleanup=True):
+@@ -6,6 +6,7 @@
+ import argparse
+ import subprocess
+ import os
++import re
+ import os.path
+ import tempfile
+ import shutil
+@@ -25,7 +26,21 @@ def parse_args():
+     return parser.parse_args();
+ 
+ def get_pymesh_dir():
+-    return os.path.join(sys.path[0], "..");
++    p = os.path.normpath(os.path.join(sys.path[0], ".."))
++    return re.sub(r'\\', '/', p)
++
++
++def hack_cmake_install(fn, instdir):
++    with open(fn) as f:
++        old = f.read()
++    prefix = f"""if (BUILD_TYPE STREQUAL "Debug")
++    set(CMAKE_INSTALL_PREFIX "{instdir}/debug")
++else()
++    set(CMAKE_INSTALL_PREFIX "{instdir}")
++endif()"""
++    with open(fn, 'w') as fo:
++        fo.write(prefix + "\n" + old)
++
+ 
+ def build_generic(libname, build_flags="", cleanup=True):
+     pymesh_dir = get_pymesh_dir();
+@@ -43,11 +58,21 @@ def build_generic(libname, build_flags="", cleanup=True):
      subprocess.check_call(cmd.split(), cwd=build_dir);
  
      # Build cgal
 -    cmd = "cmake --build {}".format(build_dir);
-+    rls = "--config Release" if os.name == 'nt' else ''
-+    cmd = "cmake --build {} {}".format(build_dir, rls);
-     subprocess.check_call(cmd.split());
- 
+-    subprocess.check_call(cmd.split());
+-
 -    cmd = "cmake --build {} --target install".format(build_dir);
-+    cmd = "cmake --build {} {} --target install".format(build_dir, rls);
-     subprocess.check_call(cmd.split());
+-    subprocess.check_call(cmd.split());
++    if os.name == "nt":
++        hack_cmake_install(f"{build_dir}/cmake_install.cmake", f"{pymesh_dir}/python/pymesh/third_party")
++        cmd = f"cmake --build {build_dir} --config Debug";
++        subprocess.check_call(cmd.split());
++        cmd = f"cmake --build {build_dir} --config Release";
++        subprocess.check_call(cmd.split());
++        cmd = f"cmake --build {build_dir} --config Debug --target install";
++        subprocess.check_call(cmd.split());
++        cmd = f"cmake --build {build_dir} --config Release --target install";
++        subprocess.check_call(cmd.split());
++    else:
++        cmd = "cmake --build {}".format(build_dir);
++        subprocess.check_call(cmd.split());
++        cmd = "cmake --build {} --target install".format(build_dir);
++        subprocess.check_call(cmd.split());
  
      # Clean up
+     if cleanup:
 diff --git a/tools/Boolean/Clipper/ClipperEngine.cpp b/tools/Boolean/Clipper/ClipperEngine.cpp
-index 671fb372..b6498e3a 100644
+index 671fb37..b6498e3 100644
 --- a/tools/Boolean/Clipper/ClipperEngine.cpp
 +++ b/tools/Boolean/Clipper/ClipperEngine.cpp
 @@ -35,7 +35,7 @@ namespace ClipperEngineHelper {
@@ -231,7 +275,7 @@ index 671fb372..b6498e3a 100644
      m_loops_2.clear();
      extract_boundary_loops();
 diff --git a/tools/CGAL/SnapRounding2.cpp b/tools/CGAL/SnapRounding2.cpp
-index 3d6fd8e9..86af79cf 100644
+index 3d6fd8e..86af79c 100644
 --- a/tools/CGAL/SnapRounding2.cpp
 +++ b/tools/CGAL/SnapRounding2.cpp
 @@ -3,6 +3,7 @@
@@ -243,7 +287,7 @@ index 3d6fd8e9..86af79cf 100644
  #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
  #include <CGAL/Snap_rounding_traits_2.h>
 diff --git a/tools/MeshUtils/DegeneratedTriangleRemoval.cpp b/tools/MeshUtils/DegeneratedTriangleRemoval.cpp
-index d53eb225..56bc9826 100644
+index d53eb22..56bc982 100644
 --- a/tools/MeshUtils/DegeneratedTriangleRemoval.cpp
 +++ b/tools/MeshUtils/DegeneratedTriangleRemoval.cpp
 @@ -23,7 +23,7 @@ DegeneratedTriangleRemoval::DegeneratedTriangleRemoval(
@@ -256,7 +300,7 @@ index d53eb225..56bc9826 100644
  }
  
 diff --git a/tools/MeshUtils/FaceUtils.cpp b/tools/MeshUtils/FaceUtils.cpp
-index e6b9bc79..50adb596 100644
+index e6b9bc7..50adb59 100644
 --- a/tools/MeshUtils/FaceUtils.cpp
 +++ b/tools/MeshUtils/FaceUtils.cpp
 @@ -10,18 +10,18 @@ bool FaceUtils::is_colinear_2D(
@@ -322,7 +366,7 @@ index e6b9bc79..50adb596 100644
      return results;
  }
 diff --git a/tools/MeshUtils/MeshUtils.cpp b/tools/MeshUtils/MeshUtils.cpp
-index 7ca6fcbf..0f73e476 100644
+index 7ca6fcb..0f73e47 100644
 --- a/tools/MeshUtils/MeshUtils.cpp
 +++ b/tools/MeshUtils/MeshUtils.cpp
 @@ -39,7 +39,7 @@ MatrixI MeshUtils::extract_exterior_faces(const MatrixI& voxels) {
@@ -335,7 +379,7 @@ index 7ca6fcbf..0f73e476 100644
              vertex_buffer.push_back(&itr->first);
          }
 diff --git a/tools/MeshUtils/TriangleMetric.cpp b/tools/MeshUtils/TriangleMetric.cpp
-index b3303431..d4ac6004 100644
+index b330343..d4ac600 100644
 --- a/tools/MeshUtils/TriangleMetric.cpp
 +++ b/tools/MeshUtils/TriangleMetric.cpp
 @@ -18,6 +18,12 @@ using namespace TriangleMetricHelper;
@@ -352,7 +396,7 @@ index b3303431..d4ac6004 100644
  TriangleMetric::TriangleMetric() {
  	m_ft_types[0] = m_ft_types[1] = VERTEX;
 diff --git a/tools/MeshUtils/TriangleMetric.h b/tools/MeshUtils/TriangleMetric.h
-index 9127f9e8..7674e1fd 100644
+index 9127f9e..7674e1f 100644
 --- a/tools/MeshUtils/TriangleMetric.h
 +++ b/tools/MeshUtils/TriangleMetric.h
 @@ -30,7 +30,7 @@ class TriangleMetric {
@@ -377,7 +421,7 @@ index 9127f9e8..7674e1fd 100644
      private:
          static const Real epsilon;
 diff --git a/tools/MeshUtils/VoxelUtils.cpp b/tools/MeshUtils/VoxelUtils.cpp
-index 063712d8..6de6799f 100644
+index 063712d..6de6799 100644
 --- a/tools/MeshUtils/VoxelUtils.cpp
 +++ b/tools/MeshUtils/VoxelUtils.cpp
 @@ -20,7 +20,7 @@ VectorF VoxelUtils::get_tet_orientations(
@@ -417,7 +461,7 @@ index 063712d8..6de6799f 100644
                          const_cast<double*>(v0.data()),
                          const_cast<double*>(v2.data()),
 diff --git a/tools/Predicates/predicates.c b/tools/Predicates/predicates.c
-index c20762b9..3f996294 100644
+index c20762b..3f99629 100644
 --- a/tools/Predicates/predicates.c
 +++ b/tools/Predicates/predicates.c
 @@ -494,7 +494,7 @@ REAL *e;
@@ -817,7 +861,7 @@ index c20762b9..3f996294 100644
    REAL aex, bex, cex, dex;
    REAL aey, bey, cey, dey;
 diff --git a/tools/Predicates/predicates.h b/tools/Predicates/predicates.h
-index 894e4d6a..11ae11aa 100644
+index 894e4d6..11ae11a 100644
 --- a/tools/Predicates/predicates.h
 +++ b/tools/Predicates/predicates.h
 @@ -6,15 +6,15 @@ extern "C" {
