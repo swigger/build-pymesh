@@ -61,7 +61,7 @@ function NormalizeEnv {
 }
 
 if (-Not (Test-Path -Path PyMesh)) {
-    git clone --depth 1 --recursive https://github.com/PyMesh/PyMesh.git
+    git clone --depth 1 --recursive https://github.com/swigger/PyMesh.git
     mkdir -ErrorAction Ignore "$PYMESH_PATH\build"
 }
 

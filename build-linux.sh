@@ -8,7 +8,7 @@ export PYMESH_PATH="$(pwd)/PyMesh"
 
 # fetch pymesh if not found.
 if [ ! -d "$PYMESH_PATH" ]; then
-    git clone --depth 1 --recursive https://github.com/PyMesh/PyMesh.git
+    git clone --depth 1 --recursive https://github.com/swigger/PyMesh.git
 fi
 
 # Apply patches
