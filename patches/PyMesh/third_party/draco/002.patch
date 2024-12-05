@@ -1,8 +1,16 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 717eba5..5e58a6c 100644
+index 717eba5..b2b19fd 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1119,23 +1119,23 @@ else ()
+@@ -15,6 +15,7 @@ if ("${draco_root}" STREQUAL "${draco_build_dir}")
+           "And re-run CMake from the draco_build directory.")
+ endif ()
+ 
++include(GNUInstallDirs)
+ include(CMakePackageConfigHelpers)
+ include("${draco_root}/cmake/compiler_flags.cmake")
+ include("${draco_root}/cmake/draco_features.cmake")
+@@ -1119,23 +1120,23 @@ else ()
    if (NOT MSVC)
      # Install our pkg-config file.
      install(FILES "${draco_build_dir}/draco.pc"
@@ -13,7 +21,7 @@ index 717eba5..5e58a6c 100644
    # Add install rules for lib and executable targets.
    install(TARGETS dracodec dracoenc draco
 -          DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
-+	  DESTINATION "${CCMAKE_INSTALL_LIBDIR}")
++	  DESTINATION "${CMAKE_INSTALL_LIBDIR}")
    if (BUILD_UNITY_PLUGIN)
      install(TARGETS dracodec_unity
 -            DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
