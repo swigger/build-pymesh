@@ -130,21 +130,37 @@ if (-Not (Test-Path -Path "$PYMESH_PATH/build/PyMesh.sln")) {
     cmake ..
 }
 
-# build the release version
-Set-Location "$PYMESH_PATH\build"
-cmake --build . --config Release
-if ($?) {
-    Set-Location "$PYMESH_PATH\build\tests"
-    $ENV:PATH="$PYMESH_PATH\python\pymesh\lib\Release;$PYMESH_PATH\python\pymesh\third_party\bin;$ENV:PATH"
-    NormalizeEnv "PATH"
-    cmake --build . --config Release --target tests
-    
-    # build the All-in-one python package
-    Set-Location "$PYMESH_PATH"
-    $LIBS_PATH=(Resolve-Path ((python -c "import sysconfig; print(sysconfig.get_path('include'))") + "\..\libs")).path
-    link /nologo /dll /debug /LTCG /out:PyMesh.cp310-win_amd64.pyd /LIBPATH:$LIBS_PATH /LIBPATH:"$VCPKG_PATH\installed\x64-windows-static\lib" "@..\objs.txt" /nodefaultlib:tbb.lib gmp.lib mpfr.lib    
+if (-Not (Test-Path -Path "$PYMESH_PATH/build/.done_tag")) {
+    # build the release version
+    Set-Location "$PYMESH_PATH\build"
+    cmake --build . --config Release
+    if ($?) {
+        Set-Location "$PYMESH_PATH\build\tests"
+        $ENV:PATH="$PYMESH_PATH\python\pymesh\lib\Release;$PYMESH_PATH\python\pymesh\third_party\bin;$ENV:PATH"
+        NormalizeEnv "PATH"
+        cmake --build . --config Release --target tests
 
-    Set-Location $PSScriptRoot
-} else {
-    exit 1
+        # build the All-in-one python package
+        Set-Location "$PYMESH_PATH"
+        $LIBS_PATH=(Resolve-Path ((python -c "import sysconfig; print(sysconfig.get_path('include'))") + "\..\libs")).path
+        $EXT_SUFFIX=(python -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
+        link /nologo /dll /debug /LTCG /out:PyMesh.$EXT_SUFFIX /LIBPATH:$LIBS_PATH /LIBPATH:"$VCPKG_PATH\installed\x64-windows-static\lib" "@..\objs.txt" /nodefaultlib:tbb.lib gmp.lib mpfr.lib
+
+        if ($?) {
+            New-Item -ItemType File -Path "$PYMESH_PATH/build/.done_tag" -Force
+        } else {
+            Set-Location $PSScriptRoot
+            exit 1
+        }
+        Set-Location $PSScriptRoot
+    } else {
+        exit 1
+    }
+}
+
+$ENV:PYTHONPATH="$PYMESH_PATH;$PYMESH_PATH/python;$ENV:PYTHONPATH"
+NormalizeEnv "PYTHONPATH"
+python -c "import pymesh;pymesh.test(verbose=3)"
+if ( $? ) {
+    Write-Output "Cong! ALL DONE! (Note: expected failure is NOT an error)"
 }
