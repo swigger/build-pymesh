@@ -1,5 +1,6 @@
 /PyMesh/
 /vcpkg/
+.venv/
 *.old
 *.tmp
 *.tgz

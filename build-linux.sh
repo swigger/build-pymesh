@@ -57,3 +57,8 @@ if [ ! -f "$PYMESH_PATH/build/.all_done_tag" ] ; then
     cd "$PYMESH_PATH/build"
     cmake --build . && cmake --build . --target tests && touch $PYMESH_PATH/build/.all_done_tag
 fi
+
+env PYTHONPATH="$PYMESH_PATH/python/pymesh/lib:$PYMESH_PATH/python:$PYTHONPATH" python3 -c "import pymesh;pymesh.test(verbose=3)"
+if [ $? -eq 0 ] ; then
+	echo "Cong! ALL DONE! (Note: expected failure is not an ERROR)"
+fi
